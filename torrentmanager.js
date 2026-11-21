@@ -1455,6 +1455,17 @@
     error.isConfigError = true;
     return error;
   }
+  function RequestClass() {
+    var Cls = typeof Lampa !== "undefined" && (Lampa.Reguest || Lampa.Request);
+    if (Cls) {
+      return new Cls();
+    }
+    throw new Error("Lampa Request class is not available");
+  }
+  function isLocalUrl(url) {
+    if (!url) return false;
+    return /^(https?:\/\/)?(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|localhost)/i.test(url);
+  }
   function isHttpUrl(url) {
     return HTTP_URL_PATTERN.test(url);
   }
@@ -1473,7 +1484,7 @@
     if (!normalizedUrl) {
       throw createConfigError("".concat(clientName, " URL is not configured"));
     }
-    if (config.useProxy) {
+    if (config.useProxy && !isLocalUrl(normalizedUrl)) {
       if (!isHttpUrl(normalizedUrl)) {
         throw createConfigError("".concat(clientName, " URL must include http:// or https:// when proxy is enabled"));
       }
@@ -1488,9 +1499,14 @@
   var CONFIG_PREFIX$1 = "lmetorrentqBittorent";
   function getConfig$1() {
     var rawApiKey = Lampa.Storage.field("".concat(CONFIG_PREFIX$1, "ApiKey"));
+    var rawUrl = sanitizeConfigString(Lampa.Storage.field("".concat(CONFIG_PREFIX$1, "Url")));
+    var useProxy = Lampa.Storage.field("".concat(CONFIG_PREFIX$1, "Proxy")) === true;
+    if (isLocalUrl(rawUrl)) {
+      useProxy = false;
+    }
     return {
-      url: sanitizeConfigString(Lampa.Storage.field("".concat(CONFIG_PREFIX$1, "Url"))),
-      useProxy: Lampa.Storage.field("".concat(CONFIG_PREFIX$1, "Proxy")) === true,
+      url: rawUrl,
+      useProxy: useProxy,
       proxy: LME_PROXY_URL,
       apiKey: rawApiKey && rawApiKey !== "undefined" && rawApiKey !== "null" ? rawApiKey : ""
     };
@@ -1506,7 +1522,7 @@
     if (contentType) {
       headers["Content-Type"] = contentType;
     }
-    if (config.useProxy) {
+    if (config.useProxy && !isLocalUrl(config.url)) {
       headers["x-requested-with"] = "lme-plugins";
       if (config.apiKey) {
         headers.Authorization = "Bearer ".concat(config.apiKey);
@@ -1530,8 +1546,7 @@
     var timeout = typeof options.timeout === "number" ? options.timeout : 10000;
     var headers = getHeaders$1(options.contentType);
 
-    var RequestClass = typeof Lampa !== "undefined" && (Lampa.Reguest || Lampa.Request);
-    if (RequestClass) {
+    if (typeof Lampa !== "undefined" && (Lampa.Reguest || Lampa.Request)) {
       return new Promise(function (resolve, reject) {
         var network = new RequestClass();
         network.timeout(timeout);
@@ -8147,7 +8162,7 @@
    */
   var MANIFEST = {
     type: 'other',
-    version: '3.4.3-fork',
+    version: '3.4.4-fork',
     author: '@beermix',
     name: 'Torrent Manager (Fork)',
     description: 'Manager and Runner query',
