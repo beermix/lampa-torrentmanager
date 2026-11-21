@@ -1526,11 +1526,47 @@
     var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
     getConfig$1();
     var method = (options.method || "GET").toUpperCase();
+    var targetUrl = "".concat(getApiBase$1()).concat(path);
+    var timeout = typeof options.timeout === "number" ? options.timeout : 10000;
+    var headers = getHeaders$1(options.contentType);
+
+    if (typeof Lampa !== "undefined" && Lampa.Reguest) {
+      return new Promise(function (resolve, reject) {
+        var network = new Lampa.Reguest();
+        network.timeout(timeout);
+        var postData = options.data || null;
+        if (postData && typeof postData === "object" && !(postData instanceof FormData) && typeof postData !== "string") {
+          if (typeof $ !== "undefined" && $.param) {
+            postData = $.param(postData);
+          } else {
+            postData = Object.keys(postData).map(function (k) {
+              return encodeURIComponent(k) + "=" + encodeURIComponent(postData[k]);
+            }).join("&");
+          }
+        }
+        network.quiet(targetUrl, function (res) {
+          if (typeof res === "string") {
+            try {
+              res = JSON.parse(res);
+            } catch (e) {}
+          }
+          resolve(res);
+        }, function (err) {
+          reject(err);
+        }, postData, {
+          headers: headers,
+          type: method,
+          dataType: "text"
+        });
+      });
+    }
+
     var settings = {
-      url: "".concat(getApiBase$1()).concat(path),
+      url: targetUrl,
       method: method,
-      timeout: typeof options.timeout === "number" ? options.timeout : 10000,
-      headers: getHeaders$1(options.contentType)
+      timeout: timeout,
+      crossDomain: true,
+      headers: headers
     };
     if (options.data) {
       settings.data = options.data;
@@ -8107,7 +8143,7 @@
    */
   var MANIFEST = {
     type: 'other',
-    version: '3.4.1-fork',
+    version: '3.4.2-fork',
     author: '@beermix',
     name: 'Torrent Manager (Fork)',
     description: 'Manager and Runner query',
