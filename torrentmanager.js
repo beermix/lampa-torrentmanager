@@ -1530,9 +1530,10 @@
     var timeout = typeof options.timeout === "number" ? options.timeout : 10000;
     var headers = getHeaders$1(options.contentType);
 
-    if (typeof Lampa !== "undefined" && Lampa.Reguest) {
+    var RequestClass = typeof Lampa !== "undefined" && (Lampa.Reguest || Lampa.Request);
+    if (RequestClass) {
       return new Promise(function (resolve, reject) {
-        var network = new Lampa.Reguest();
+        var network = new RequestClass();
         network.timeout(timeout);
         var postData = options.data || null;
         if (postData && typeof postData === "object" && !(postData instanceof FormData) && typeof postData !== "string") {
@@ -1628,8 +1629,9 @@
               break;
             }
             if (showNotification) {
+              var errDetail = _t2 ? " [" + (_t2.status || _t2.statusText || _t2.message || "err") + "]" : "";
               Lampa.Bell.push({
-                text: Lampa.Lang.translate("AuthDenied")
+                text: Lampa.Lang.translate("AuthDenied") + errDetail
               });
             }
             throw new Error("qBittorrent URL is not configured");
@@ -1644,8 +1646,9 @@
             });
           case 3:
             if (showNotification) {
+              var ver = _context2.v ? " (" + String(_context2.v).trim() + ")" : "";
               Lampa.Bell.push({
-                text: Lampa.Lang.translate("AuthSuccess")
+                text: Lampa.Lang.translate("AuthSuccess") + ver
               });
             }
             return _context2.a(2, true);
@@ -1654,8 +1657,9 @@
             _t2 = _context2.v;
             console.log("TDM", "qBittorrent auth error:", _t2);
             if (showNotification) {
+              var errDetail = _t2 ? " [" + (_t2.status || _t2.statusText || _t2.message || "err") + "]" : "";
               Lampa.Bell.push({
-                text: Lampa.Lang.translate("AuthDenied")
+                text: Lampa.Lang.translate("AuthDenied") + errDetail
               });
             }
             throw normalizeError(_t2, "qBittorrent auth failed");
@@ -2188,7 +2192,7 @@
     }
     function reguest(headers, body, timeout) {
       return new Promise(function (resolve, reject) {
-        var network = new Lampa.Reguest();
+        var network = new RequestClass();
         network.timeout(timeout);
         network.quiet(getApiUrl(), resolve, reject, body, {
           headers: headers,
@@ -3288,7 +3292,7 @@
                     _context.p = 1;
                     _context.n = 2;
                     return new Promise(function (resolve, reject) {
-                      var network = new Lampa.Reguest();
+                      var network = new RequestClass();
                       network.quiet(makeUrl('/webapi/auth.cgi', {
                         api: 'SYNO.API.Auth',
                         method: 'login',
@@ -3400,7 +3404,7 @@
             _context3.p = 4;
             _context3.n = 5;
             return new Promise(function (resolve, reject) {
-              var network = new Lampa.Reguest();
+              var network = new RequestClass();
               network.quiet(makeUrl(path, requestParams), resolve, reject, null, {
                 headers: getHeaders(),
                 type: requestOptions.method,
@@ -5103,7 +5107,7 @@
   function Component() {
     var self = this;
     var client = Lampa.Storage.field("lmetorrentSelect");
-    var network = new Lampa.Reguest();
+    var network = new RequestClass();
     var updateTick = null;
     var updateInProgress = false;
     var sections = []; // Array of PanelSection instances
@@ -5634,7 +5638,7 @@
 
   // plugins/torrentmanager/utils/panel/sectionView.js — Standalone grid component
   function SectionView(object) {
-    var network = new Lampa.Reguest();
+    var network = new RequestClass();
     var scroll = new Lampa.Scroll({
       mask: true,
       over: true
@@ -8143,7 +8147,7 @@
    */
   var MANIFEST = {
     type: 'other',
-    version: '3.4.2-fork',
+    version: '3.4.3-fork',
     author: '@beermix',
     name: 'Torrent Manager (Fork)',
     description: 'Manager and Runner query',
