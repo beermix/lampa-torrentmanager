@@ -5043,7 +5043,7 @@
       self.card.on('hover:enter', function () {
         Lampa.Activity.push({
           url: '',
-          title: 'Torrent Manager',
+          title: 'qBittorrent Manager',
           component: 'lmetorrentPanel',
           page: 1
         });
@@ -5408,12 +5408,12 @@
    */
   var MANIFEST = {
     type: 'other',
-    version: '3.4.4-fork',
+    version: '3.5.0-fork',
     author: '@beermix',
-    name: 'Torrent Manager (Fork)',
-    description: 'Manager and Runner query',
+    name: 'qBittorrent Manager',
+    description: 'qBittorrent Manager for Lampa',
     component: 'lmetorrent',
-    icon: "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"200\" viewBox=\"0 0 24 24\"><path fill=\"currentColor\" d=\"M13.684 23.94a12.013 12.013 0 0 0 9.599-7.79c-.118.044-.26.096-.432.147c-2 .59-3.404-.466-3.687-.649c-.283-.18-.587-.48-.643-.464c-.183 1.132-1.218 2.706-3.58 3.42c-1.295.391-2.687.4-3.681-.157l.328.822c.13.328.351.866.488 1.192c0 0 .858 2.044 1.608 3.48M2.723 7.153l3.54-.66c.323-.059.68.124.794.407l2.432 6.07c.332.633.399.773.615 1.043c0 0 1.68 2.398 4.24 1.812c1.726-.394 2.532-1.69 2.587-2.612c.057-.296-.032-.669-.185-1.016L13.832 5.61c-.117-.266.022-.527.306-.581l2.953-.55a.69.69 0 0 1 .706.376l3.227 6.91c.13.276.394.712.588.966c0 0 .671.964 1.747.78c.266 0 .569-.143.569-.143c.047-.43.072-.866.072-1.31c0-6.627-5.373-12-12.002-12C5.372.06 0 5.433 0 12.06c0 5.319 3.46 9.827 8.252 11.402a24.768 24.768 0 0 1-.919-2.121L2.298 7.808c-.111-.297.083-.59.425-.654\"/></svg>"
+    icon: "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 1024 1024\"><defs><linearGradient x1=\"34.012%\" y1=\"0%\" x2=\"76.373%\" y2=\"76.805%\" id=\"qbt-grad\"><stop stop-color=\"#72B4F5\" offset=\"0%\"/><stop stop-color=\"#356EBF\" offset=\"100%\"/></linearGradient></defs><g fill=\"none\" fill-rule=\"evenodd\"><circle stroke=\"#DAEFFF\" stroke-width=\"32\" fill=\"url(#qbt-grad)\" cx=\"512\" cy=\"512\" r=\"496\"/><path d=\"M712.898 332.399q66.657 0 103.38 45.671 37.03 45.364 37.03 128.684t-37.34 129.61q-37.03 45.98-103.07 45.98-33.02 0-60.484-12.035-27.156-12.344-45.672-37.649h-3.703l-10.8 43.512h-36.724V196h51.227v116.65q0 39.191-2.469 70.359h2.47q35.796-50.61 106.155-50.61zm-7.406 42.894q-52.46 0-75.605 30.242-23.145 29.934-23.145 101.219t23.762 102.145q23.761 30.55 76.222 30.55 47.215 0 70.36-34.254 23.144-34.562 23.144-99.058 0-66.04-23.144-98.442-23.145-32.402-71.594-32.402z\" fill=\"#fff\"/><path d=\"M317.273 639.45q51.227 0 74.68-27.466 23.453-27.464 24.996-92.578v-11.418q0-70.976-24.07-102.144-24.07-31.168-76.223-31.168-45.055 0-69.125 35.18-23.762 34.87-23.762 98.75 0 63.879 23.454 97.515 23.761 33.328 70.05 33.328zm-7.715 42.894q-65.421 0-102.144-45.98-36.723-45.981-36.723-128.376 0-83.011 37.032-129.609 37.03-46.598 103.07-46.598 69.433 0 106.773 52.461h2.778l7.406-46.289h40.426V828h-51.227V683.27q0-30.86 3.395-52.461h-4.012q-35.488 51.535-106.774 51.535z\" fill=\"#c8e8ff\"/></g></svg>"
   };
   var SELECT_KEY = "".concat(MANIFEST.component, "Select");
   var SYNOLOGY_KEY = "lmetorrentsynologyKey";
@@ -5468,20 +5468,6 @@
     var clientAuthHandlers = {
       qBittorent: function qBittorent() {
         return Qbittorent.auth(false)["catch"](function () {});
-      },
-      transmission: function transmission() {
-        return Transmission.auth()["catch"](function () {});
-      },
-      keenetic: function keenetic() {
-        return Keenetic.auth();
-      },
-      synology: function synology() {
-        var synologyKey = Lampa.Storage.field(SYNOLOGY_KEY);
-        var hasValidSynologySid = synologyKey && _typeof(synologyKey) === "object" && synologyKey.sID;
-        if (!hasValidSynologySid || isKeyDateOld(synologyKey.createDate)) {
-          return Synology.auth();
-        }
-        return Promise.resolve();
       }
     };
     var authHandler = clientAuthHandlers[selectedClient];
