@@ -956,31 +956,75 @@
     }
     return 'is-low';
   }
+  function formatTorrentSpeed(torrent) {
+    if (!torrent) return '';
+    var state = typeof classifyState$1 === 'function' ? classifyState$1(torrent.state) : (typeof classifyState === 'function' ? classifyState(torrent.state) : 'paused');
+    if (state === 'downloading') {
+      var speed = torrent.dlspeed && torrent.dlspeed > 0 ? '↓ ' + Lampa.Utils.bytesToSize(torrent.dlspeed, 1) + '/s' : '↓ 0 B/s';
+      if (torrent.eta && torrent.eta > 0 && torrent.eta < 8640000) {
+        var etaStr = '';
+        if (torrent.eta < 60) etaStr = torrent.eta + 's';
+        else if (torrent.eta < 3600) etaStr = Math.round(torrent.eta / 60) + 'm';
+        else etaStr = Math.floor(torrent.eta / 3600) + 'h ' + Math.round((torrent.eta % 3600) / 60) + 'm';
+        return speed + ' · ' + etaStr;
+      }
+      return speed;
+    }
+    if (state === 'seeding') {
+      return torrent.upspeed && torrent.upspeed > 0 ? '↑ ' + Lampa.Utils.bytesToSize(torrent.upspeed, 1) + '/s' : '↑ 0 B/s';
+    }
+    if (state === 'paused') {
+      return Lampa.Lang.translate('torrentmanager_section_paused');
+    }
+    if (state === 'completed') {
+      return Lampa.Lang.translate('torrentmanager_section_completed');
+    }
+    if (state === 'checking') {
+      return Lampa.Lang.translate('torrentmanager_section_checking');
+    }
+    return '';
+  }
+
+  function getStatusClass(state) {
+    var c = typeof classifyState$1 === 'function' ? classifyState$1(state) : (typeof classifyState === 'function' ? classifyState(state) : 'paused');
+    if (c === 'downloading' || c === 'checking') return 'is-downloading';
+    if (c === 'seeding' || c === 'completed') return 'is-seeding';
+    if (c === 'errored') return 'is-error';
+    return 'is-paused';
+  }
+
   function Item(data) {
-    this.id = data.id; // зберігаємо ідентифікатор торренту
-    var initialProgress = Number((data.completed * 100).toFixed(2));
+    this.id = data.id;
+    var initialProgress = Math.min(100, Math.max(0, Number((data.completed * 100).toFixed(2))));
+    var statusClass = getStatusClass(data.state);
     var itemN = Lampa.Template.get('lmetorrent_item__card', {
       title: data.name,
       size: Lampa.Utils.bytesToSize(data.size, 0),
       state: getStandardizedStateName(data.state),
+      speed: formatTorrentSpeed(data),
+      status_class: statusClass,
       "data-completed": initialProgress,
       completed: initialProgress + "%",
       image: data.image,
       image_src: '',
       quality: data.name.match(regexp2$1) ? data.name.match(regexp2$1).toString().replace(/[ .()]/g, '') : ''
     });
-    itemN.find('.lmetorrent_card__completed').addClass(getProgressClass$1(initialProgress));
     this.render = function () {
       return itemN;
     };
 
-    // Метод для оновлення статусу та прогресу
     this.update = function (newData) {
-      // Припускається, що відповідні елементи мають класи для статусу та прогресу
-      itemN.find('.lmetorrent_card__state').text(getStandardizedStateName(newData.state));
-      var progress = Number((newData.completed * 100).toFixed(2));
+      var progress = Math.min(100, Math.max(0, Number((newData.completed * 100).toFixed(2))));
+      var statusClass = getStatusClass(newData.state);
       itemN.attr("data-completed", progress);
-      itemN.find('.lmetorrent_card__completed').removeClass('is-low is-mid is-high').addClass(getProgressClass$1(progress)).text(progress + "%");
+      itemN.find('.lmetorrent_card__state-text').text(getStandardizedStateName(newData.state));
+      itemN.find('.lmetorrent_card__badge').removeClass('is-downloading is-seeding is-paused is-error').addClass(statusClass);
+      itemN.find('.lmetorrent_card__progress').removeClass('is-downloading is-seeding is-paused is-error').addClass(statusClass).val(progress);
+      itemN.find('.lmetorrent_card__percent').text(progress + "%");
+      itemN.find('.lmetorrent_card__speed').text(formatTorrentSpeed(newData));
+      if (newData.size) {
+        itemN.find('.lmetorrent_card__size').text(Lampa.Utils.bytesToSize(newData.size, 0));
+      }
     };
     this.destroy = function () {
       itemN.remove();
@@ -1731,7 +1775,10 @@
                         state: _t6,
                         labels: _t7,
                         image: _t8,
-                        completed: _t9
+                        completed: _t9,
+                        dlspeed: torrent.dlspeed || 0,
+                        upspeed: torrent.upspeed || 0,
+                        eta: torrent.eta || 0
                       });
                   }
                 }, _callee3);
@@ -4852,7 +4899,7 @@
     return function () {
       Lampa.Activity.push({
         url: '',
-        title: String(Lampa.Storage.get('lmetorrentSelect') || '').toUpperCase() + " Manager",
+        title: "qBittorrent Manager",
         component: 'lmetorrentPanel',
         page: 1
       });
@@ -4900,8 +4947,12 @@
             createPanelNavigationItem()();
           }
         }].concat(_toConsumableArray(sortedTorrents.map(function (torrent) {
+          var pct = Math.round((torrent.completed || 0) * 100);
+          var spd = formatTorrentSpeed(torrent);
+          var label = "".concat(torrent.name, " · ").concat(pct, "%");
+          if (spd) label += " · ".concat(spd);
           return {
-            title: "".concat(torrent.name, " (").concat(Math.round((torrent.completed || 0) * 100), "%)"),
+            title: label,
             action: 'torrent',
             torrent: torrent
           };
@@ -4996,23 +5047,24 @@
     this.playlist = playlist;
     this.card = null;
     this.create = function () {
-      var progress = Number((self.data.completed * 100).toFixed(2));
+      var progress = Math.min(100, Math.max(0, Number((self.data.completed * 100).toFixed(2))));
+      var statusClass = getStatusClass(self.data.state);
       self.card = Lampa.Template.get('lmetorrent_item__card', {
         title: self.data.name,
         size: Lampa.Utils.bytesToSize(self.data.size, 0),
         state: getStandardizedStateName(self.data.state),
+        speed: formatTorrentSpeed(self.data),
+        status_class: statusClass,
         'data-completed': progress,
         completed: progress + '%',
         image: self.data.image || '',
         image_src: '',
         quality: self.data.name && self.data.name.match(regexp2) ? self.data.name.match(regexp2).toString().replace(/[ .()]/g, '') : ''
       });
-      self.card.find('.lmetorrent_card__completed').addClass(getProgressClass(progress));
       self.card.on('hover:enter', function () {
         showTorrentMenu(self.data, self.playlist);
       });
       self.card.on('hover:focus', function () {
-        // Scroll tracking handled by the Lampa row system
       });
     };
     this.render = function (js) {
@@ -5423,7 +5475,7 @@
    */
   function registerTemplates() {
     // CSS styles
-    Lampa.Template.add('lmemStyle', "\n        <style>\n            @charset 'UTF-8';.btnTDdownload{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center}svg.btnTDdownload{width:36px;height:36px;margin-right:5%}.lmetorrent-error_body{-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;text-align:center}.lmetorrent-error_body .lmetorrent-error_result{margin-top:2em}.lmetorrent-head{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;padding:0 2% 0 2%;margin:0 2% 2% 2%}.lmetorrent-header__update{white-space:nowrap}.lmetorrent-header__space{margin-left:auto}.lmetorrent-catalog--list.category-full{margin-left:0;padding:0 2.5%}.lmetorrent-catalog--state{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;min-height:45vh;padding:0 2%}.lmetorrent-state{max-width:46em;width:100%;text-align:center}.lmetorrent-state__title{font-size:1.35em;font-weight:600}.lmetorrent-state__description{margin-top:.8em;opacity:.85;line-height:1.4}.lmetorrent-state__actions{margin-top:1.3em;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;gap:.7em}.lmetorrent-catalog--list.category-full .card.card--category .card__view{margin-bottom:.72em}.lmetorrent_card__completed{position:absolute;right:0;bottom:0;font-size:.8em;-webkit-border-radius:.3em;-moz-border-radius:.3em;padding:.4em .4em;border-radius:.3em;text-align:center;font-weight:bold;background-color:var(--background-color);color:var(--text-color)}.lmetorrent_card__completed.is-low{--background-color:#fcc;--text-color:#900}.lmetorrent_card__completed.is-mid{--background-color:#ffc;--text-color:#990}.lmetorrent_card__completed.is-high{--background-color:#cfc;--text-color:#090}.lmetorrent_card__state{left:0;top:0}.lmetorrent_card__size{left:0;bottom:0}.lmetorrent_card__size,.lmetorrent_card__state{position:absolute;padding:.4em .4em;background:#fff;color:#000;font-size:.8em;-webkit-border-radius:.3em;border-radius:.3em}@media screen and (max-width:900px){.lmetorrent-head{margin:0 2% 3% 2%;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;row-gap:.6em}.lmetorrent-header__space{margin-left:0;width:100%;font-size:.95em;opacity:.85}.lmetorrent-catalog--list.category-full{margin-left:0;padding:0 1%}}@media screen and (max-width:767px){.lmetorrent-head{margin:0 2% 2.4% 2%;-webkit-flex-wrap:nowrap;-ms-flex-wrap:nowrap;flex-wrap:nowrap;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;gap:.8em}.lmetorrent-header__update{font-size:1.12em}.lmetorrent-header__space{margin-left:auto;width:auto;font-size:1.08em;opacity:.98;white-space:nowrap}.lmetorrent-catalog--list.category-full{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;padding:0}.lmetorrent-catalog--list.category-full .card.card--category{width:33.3333% !important;min-width:0;padding-left:.22em;padding-right:.22em}}@media screen and (max-width:560px){.lmetorrent-head{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start}.lmetorrent-catalog--list.category-full{padding:0}.lmetorrent-catalog--list.category-full .card.card--category .card__view{margin-bottom:.5em}.lmetorrent_card__size,.lmetorrent_card__state,.lmetorrent_card__completed{font-size:.68em}}@media screen and (max-width:420px){.lmetorrent-head{-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;row-gap:.55em}.lmetorrent-header__space{width:100%;margin-left:0}}.lmetorrent-item{margin-left:.5em;margin-right:.5em;margin-bottom:1em;width:-webkit-calc(14.2857142857% - 1em);width:calc(14.2857142857% - 1em);-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;border:solid .01em #fff;-webkit-border-radius:.8em;border-radius:.8em}.lmetorrent-item.focus{border:solid .26em #fff}.lmetorrent-item__data{margin-bottom:.4em}.lmetorrent-item__state{top:.5em;left:.5em;padding:.1em .3em;font-weight:bold;-webkit-border-radius:.25em;border-radius:.25em;color:#292d32;background-color:#eee}.lmetorrent-item__badge>svg{width:1em;height:1em;vertical-align:bottom}.lmetorrent-item__name{font-size:1.1em;margin-top:.8em;white-space:nowrap;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis}@media screen and (max-width:580px){.lmetorrent-item{width:21%}}@media screen and (max-width:385px){.lmetorrent-item__name{display:none}}.torrent-manager-icon{--icon-status-color:limegreen;color:var(--icon-status-color)}.torrent-manager-sidebar{position:fixed;top:0;right:-350px;width:350px;height:100%;background-color:rgba(0,0,0,0.85);z-index:1000;-webkit-transition:right .3s;-o-transition:right .3s;transition:right .3s;color:white;padding:20px;-webkit-box-sizing:border-box;box-sizing:border-box;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column}.torrent-manager-sidebar.visible{right:0}.torrent-manager-sidebar__header{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;margin-bottom:20px;font-weight:bold;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.torrent-manager-sidebar__list{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;gap:10px;overflow-y:auto;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1}.torrent-manager-sidebar__item{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;padding:10px;background-color:rgba(255,255,255,0.1);-webkit-border-radius:5px;border-radius:5px;cursor:pointer;gap:10px}.torrent-manager-sidebar__item:hover{background-color:rgba(255,255,255,0.2)}.torrent-manager-sidebar__item-name{white-space:nowrap;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1}.torrent-manager-sidebar__item-percent{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.lmetorrent-section{padding-bottom:1.5em}.lmetorrent-section__icon{margin-right:.4em}.lmetorrent-section__count{margin-left:.5em;opacity:.6;font-size:.85em}.lmetorrent-section .mapping--line .card--category{width:12em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.lmetorrent-section-view{width:100%;min-height:45vh}.lmetorrent-section-view__grid{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;padding:0 2%}.lmetorrent-section-view .card--category{width:14.5%;margin:0 .5% 1em}@media screen and (max-width:767px){.lmetorrent-section-view .card--category{width:30%}}.lmetorrent-section .card-more{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;width:12.75em;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;height:18em}.lmetorrent-section .card-more .card-more__box{-webkit-transition:border-color .2s,-webkit-transform .3s;transition:border-color .2s,-webkit-transform .3s;-o-transition:transform .3s,border-color .2s;transition:transform .3s,border-color .2s;transition:transform .3s,border-color .2s,-webkit-transform .3s;background:rgba(0,0,0,0.3);-webkit-border-radius:1em;border-radius:1em;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;position:relative}.lmetorrent-section .card-more .card-more__title{position:absolute;top:50%;left:0;right:0;text-align:center;font-size:1.8em;font-weight:300;margin-top:-0.7em}.lmetorrent-section .card-more.focus .card-more__box::after{content:'';position:absolute;top:-0.5em;left:-0.5em;right:-0.5em;bottom:-0.5em;border:.3em solid #fff;-webkit-border-radius:1.4em;border-radius:1.4em;z-index:-1}.lmetorrent-section .card-more--fixed-size{display:block}@media screen and (min-width:64em){body.size--bigger .lmetorrent-section .card-more{font-size:1.14em}}\n        </style>\n    ");
+    Lampa.Template.add('lmemStyle', "\n        <style>\n            @charset 'UTF-8';.btnTDdownload{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center}svg.btnTDdownload{width:36px;height:36px;margin-right:5%}.lmetorrent-error_body{-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;text-align:center}.lmetorrent-error_body .lmetorrent-error_result{margin-top:2em}.lmetorrent-head{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;padding:0 2% 0 2%;margin:0 2% 2% 2%}.lmetorrent-header__update{white-space:nowrap}.lmetorrent-header__space{margin-left:auto}.lmetorrent-catalog--list.category-full{margin-left:0;padding:0 2.5%}.lmetorrent-catalog--state{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;min-height:45vh;padding:0 2%}.lmetorrent-state{max-width:46em;width:100%;text-align:center}.lmetorrent-state__title{font-size:1.35em;font-weight:600}.lmetorrent-state__description{margin-top:.8em;opacity:.85;line-height:1.4}.lmetorrent-state__actions{margin-top:1.3em;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;gap:.7em}.lmetorrent-catalog--list.category-full .card.card--category .card__view{margin-bottom:.72em}.lmetorrent_card__completed{position:absolute;right:0;bottom:0;font-size:.8em;-webkit-border-radius:.3em;-moz-border-radius:.3em;padding:.4em .4em;border-radius:.3em;text-align:center;font-weight:bold;background-color:var(--background-color);color:var(--text-color)}.lmetorrent_card__completed.is-low{--background-color:#fcc;--text-color:#900}.lmetorrent_card__completed.is-mid{--background-color:#ffc;--text-color:#990}.lmetorrent_card__completed.is-high{--background-color:#cfc;--text-color:#090}.lmetorrent_card__state{left:0;top:0}.lmetorrent_card__size{left:0;bottom:0}.lmetorrent_card__size,.lmetorrent_card__state{position:absolute;padding:.4em .4em;background:#fff;color:#000;font-size:.8em;-webkit-border-radius:.3em;border-radius:.3em}@media screen and (max-width:900px){.lmetorrent-head{margin:0 2% 3% 2%;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;row-gap:.6em}.lmetorrent-header__space{margin-left:0;width:100%;font-size:.95em;opacity:.85}.lmetorrent-catalog--list.category-full{margin-left:0;padding:0 1%}}@media screen and (max-width:767px){.lmetorrent-head{margin:0 2% 2.4% 2%;-webkit-flex-wrap:nowrap;-ms-flex-wrap:nowrap;flex-wrap:nowrap;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;gap:.8em}.lmetorrent-header__update{font-size:1.12em}.lmetorrent-header__space{margin-left:auto;width:auto;font-size:1.08em;opacity:.98;white-space:nowrap}.lmetorrent-catalog--list.category-full{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;padding:0}.lmetorrent-catalog--list.category-full .card.card--category{width:33.3333% !important;min-width:0;padding-left:.22em;padding-right:.22em}}@media screen and (max-width:560px){.lmetorrent-head{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start}.lmetorrent-catalog--list.category-full{padding:0}.lmetorrent-catalog--list.category-full .card.card--category .card__view{margin-bottom:.5em}.lmetorrent_card__size,.lmetorrent_card__state,.lmetorrent_card__completed{font-size:.68em}}@media screen and (max-width:420px){.lmetorrent-head{-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;row-gap:.55em}.lmetorrent-header__space{width:100%;margin-left:0}}.lmetorrent-item{margin-left:.5em;margin-right:.5em;margin-bottom:1em;width:-webkit-calc(14.2857142857% - 1em);width:calc(14.2857142857% - 1em);-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;border:solid .01em #fff;-webkit-border-radius:.8em;border-radius:.8em}.lmetorrent-item.focus{border:solid .26em #fff}.lmetorrent-item__data{margin-bottom:.4em}.lmetorrent-item__state{top:.5em;left:.5em;padding:.1em .3em;font-weight:bold;-webkit-border-radius:.25em;border-radius:.25em;color:#292d32;background-color:#eee}.lmetorrent-item__badge>svg{width:1em;height:1em;vertical-align:bottom}.lmetorrent-item__name{font-size:1.1em;margin-top:.8em;white-space:nowrap;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis}@media screen and (max-width:580px){.lmetorrent-item{width:21%}}@media screen and (max-width:385px){.lmetorrent-item__name{display:none}}.torrent-manager-icon{--icon-status-color:limegreen;color:var(--icon-status-color)}.torrent-manager-sidebar{position:fixed;top:0;right:-350px;width:350px;height:100%;background-color:rgba(0,0,0,0.85);z-index:1000;-webkit-transition:right .3s;-o-transition:right .3s;transition:right .3s;color:white;padding:20px;-webkit-box-sizing:border-box;box-sizing:border-box;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column}.torrent-manager-sidebar.visible{right:0}.torrent-manager-sidebar__header{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;margin-bottom:20px;font-weight:bold;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.torrent-manager-sidebar__list{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column;gap:10px;overflow-y:auto;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1}.torrent-manager-sidebar__item{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-ms-flex-pack:justify;justify-content:space-between;padding:10px;background-color:rgba(255,255,255,0.1);-webkit-border-radius:5px;border-radius:5px;cursor:pointer;gap:10px}.torrent-manager-sidebar__item:hover{background-color:rgba(255,255,255,0.2)}.torrent-manager-sidebar__item-name{white-space:nowrap;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1}.torrent-manager-sidebar__item-percent{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.lmetorrent-section{padding-bottom:1.5em}.lmetorrent-section__icon{margin-right:.4em}.lmetorrent-section__count{margin-left:.5em;opacity:.6;font-size:.85em}.lmetorrent-section .mapping--line .card--category{width:12em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.lmetorrent-section-view{width:100%;min-height:45vh}.lmetorrent-section-view__grid{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap;padding:0 2%}.lmetorrent-section-view .card--category{width:14.5%;margin:0 .5% 1em}@media screen and (max-width:767px){.lmetorrent-section-view .card--category{width:30%}}.lmetorrent-section .card-more{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;width:12.75em;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;height:18em}.lmetorrent-section .card-more .card-more__box{-webkit-transition:border-color .2s,-webkit-transform .3s;transition:border-color .2s,-webkit-transform .3s;-o-transition:transform .3s,border-color .2s;transition:transform .3s,border-color .2s;transition:transform .3s,border-color .2s,-webkit-transform .3s;background:rgba(0,0,0,0.3);-webkit-border-radius:1em;border-radius:1em;-webkit-box-flex:1;-webkit-flex-grow:1;-ms-flex-positive:1;flex-grow:1;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;position:relative}.lmetorrent-section .card-more .card-more__title{position:absolute;top:50%;left:0;right:0;text-align:center;font-size:1.8em;font-weight:300;margin-top:-0.7em}.lmetorrent-section .card-more.focus .card-more__box::after{content:'';position:absolute;top:-0.5em;left:-0.5em;right:-0.5em;bottom:-0.5em;border:.3em solid #fff;-webkit-border-radius:1.4em;border-radius:1.4em;z-index:-1}.lmetorrent-section .card-more--fixed-size{display:block}@media screen and (min-width:64em){body.size--bigger .lmetorrent-section .card-more{font-size:1.14em}}\n        /* Modern Web Guidance: Semantic progress bar */\nprogress.lmetorrent_card__progress{appearance: none;-webkit-appearance: none;border: 0 solid transparent;overflow: clip;width: 100%;height: 6px;--progress-bar-radius: 4px;--progress-bar-track: rgba(255,255,255,0.2);--progress-bar-fill: linear-gradient(90deg, #2563eb, #38bdf8);border-radius: var(--progress-bar-radius);background: var(--progress-bar-track);display: block;box-sizing: border-box;margin: 0;padding: 0;}\nprogress.lmetorrent_card__progress::-webkit-progress-bar{background: transparent;border-radius: var(--progress-bar-radius);}\nprogress.lmetorrent_card__progress::-webkit-progress-value{background: var(--progress-bar-fill);border-radius: var(--progress-bar-radius);-webkit-transition: inline-size 0.35s ease;transition: inline-size 0.35s ease;}\nprogress.lmetorrent_card__progress::-moz-progress-bar{background: var(--progress-bar-fill);border-radius: var(--progress-bar-radius);transition: inline-size 0.35s ease;}\nprogress.lmetorrent_card__progress.is-downloading{--progress-bar-fill: linear-gradient(90deg, #2563eb, #38bdf8);}\nprogress.lmetorrent_card__progress.is-seeding{--progress-bar-fill: linear-gradient(90deg, #059669, #34d399);}\nprogress.lmetorrent_card__progress.is-paused{--progress-bar-fill: linear-gradient(90deg, #64748b, #94a3b8);}\nprogress.lmetorrent_card__progress.is-error{--progress-bar-fill: linear-gradient(90deg, #dc2626, #f87171);}\n.lmetorrent_card__badge{position: absolute;top: 0.6em;left: 0.6em;display: -webkit-box;display: -webkit-flex;display: -ms-flexbox;display: flex;-webkit-box-align: center;-webkit-align-items: center;align-items: center;gap: 0.4em;padding: 0.25em 0.55em;background: rgba(15,23,42,0.8);-webkit-backdrop-filter: blur(8px);backdrop-filter: blur(8px);border: 1px solid rgba(255,255,255,0.15);border-radius: 1em;font-size: 0.7em;font-weight: 600;color: #f8fafc;z-index: 2;box-shadow: 0 2px 6px rgba(0,0,0,0.4);}\n.lmetorrent_card__dot{width: 0.5em;height: 0.5em;border-radius: 50%;background-color: #38bdf8;box-shadow: 0 0 6px #38bdf8;display: inline-block;-webkit-flex-shrink: 0;flex-shrink: 0;}\n.lmetorrent_card__badge.is-downloading .lmetorrent_card__dot{background-color: #38bdf8;box-shadow: 0 0 6px #38bdf8;}\n.lmetorrent_card__badge.is-seeding .lmetorrent_card__dot{background-color: #34d399;box-shadow: 0 0 6px #34d399;}\n.lmetorrent_card__badge.is-paused .lmetorrent_card__dot{background-color: #94a3b8;box-shadow: 0 0 4px #94a3b8;}\n.lmetorrent_card__badge.is-error .lmetorrent_card__dot{background-color: #f87171;box-shadow: 0 0 6px #f87171;}\n.lmetorrent_card__overlay{position: absolute;left: 0;right: 0;bottom: 0;padding: 1.2em 0.6em 0.6em 0.6em;background: -webkit-linear-gradient(bottom, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.7) 65%, transparent 100%);background: linear-gradient(to top, rgba(15,23,42,0.95) 0%, rgba(15,23,42,0.7) 65%, transparent 100%);display: -webkit-box;display: -webkit-flex;display: -ms-flexbox;display: flex;-webkit-box-orient: vertical;-webkit-box-direction: normal;-webkit-flex-direction: column;flex-direction: column;gap: 0.35em;z-index: 2;border-bottom-left-radius: inherit;border-bottom-right-radius: inherit;}\n.lmetorrent_card__meta{display: -webkit-box;display: -webkit-flex;display: -ms-flexbox;display: flex;-webkit-box-pack: justify;-webkit-justify-content: space-between;justify-content: space-between;-webkit-box-align: center;-webkit-align-items: center;align-items: center;font-size: 0.72em;font-weight: 500;color: #e2e8f0;font-variant-numeric: tabular-nums;line-height: 1.2;}\n.lmetorrent_card__size{opacity: 0.85;}\n.lmetorrent_card__speed{font-size: 0.95em;font-weight: 600;color: #38bdf8;white-space: nowrap;overflow: hidden;text-overflow: ellipsis;max-width: 50%;text-align: center;}\n.lmetorrent_card__percent{font-weight: 700;color: #fff;}\n</style>\n    ");
 
     // Header template
     Lampa.Template.add('lmetorrent_header', "<div class=\"lmetorrent-header__data lmetorrent-header__update simple-button selector\">Update</div>\n          <div class=\"lmetorrent-header__data lmetorrent-header__space\">Free space: {space}</div>\n        ");
@@ -5432,7 +5484,7 @@
     Lampa.Template.add('lmetorrent_item', "<div class=\"card selector lmetorrent-item\">\n            <div class=\"lmetorrent-item__data lmetorrent-item__name\">{name}</div>\n            <div class=\"lmetorrent-item__data lmetorrent-item__state\">{state}</div>\n            <div class=\"lmetorrent-item__data lmetorrent-item__progress\">{size} / {completed}</div>\n        </div>");
 
     // Card item template
-    Lampa.Template.add('lmetorrent_item__card', "<div class=\"card card--category selector layer--visible layer--render\">\n            <div class=\"card__view\">\n                <img src=\"{image}\" data-src=\"{image_src}\" alt=\"{title}\" class=\"card__img\">\n                <div class=\"card__icons\">\n                    <div class=\"card__icons-inner\">\n                    </div>\n                </div>\n                <div class=\"lmetorrent_card__state\">{state}</div>\n                <div class=\"lmetorrent_card__size\">{size}</div>\n                <div class=\"lmetorrent_card__completed\" data-completed=\"{data-completed}\">{completed}</div>\n            </div>\n        </div>");
+    Lampa.Template.add('lmetorrent_item__card', "<div class=\"card card--category selector layer--visible layer--render\">\n            <div class=\"card__view\">\n                <img src=\"{image}\" data-src=\"{image_src}\" alt=\"{title}\" class=\"card__img\">\n                <div class=\"card__icons\">\n                    <div class=\"card__icons-inner\">\n                    </div>\n                </div>\n                <div class=\"lmetorrent_card__badge lmetorrent_card__state {status_class}\">\n                    <span class=\"lmetorrent_card__dot\"></span>\n                    <span class=\"lmetorrent_card__state-text\">{state}</span>\n                </div>\n                <div class=\"lmetorrent_card__overlay\">\n                    <div class=\"lmetorrent_card__meta\">\n                        <span class=\"lmetorrent_card__size\">{size}</span>\n                        <span class=\"lmetorrent_card__speed\">{speed}</span>\n                        <span class=\"lmetorrent_card__percent lmetorrent_card__completed\" data-completed=\"{data-completed}\">{completed}</span>\n                    </div>\n                    <progress class=\"lmetorrent_card__progress {status_class}\" max=\"100\" value=\"{data-completed}\"></progress>\n                </div>\n            </div>\n        </div>");
   }
 
   /**
