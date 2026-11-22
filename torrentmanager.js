@@ -2207,6 +2207,8 @@
   };
   var CLIENTS = {
     qBittorent: Qbittorent,
+    qbittorent: Qbittorent,
+    qBittorrent: Qbittorent,
     qbittorrent: Qbittorent
   };
   var authInFlight = {};
@@ -2327,7 +2329,7 @@
     state.blockedUntil = Date.now() + delayMs + jitterMs;
   }
   function getClient(clientName) {
-    return CLIENTS[clientName] || null;
+    return CLIENTS[clientName] || CLIENTS.qBittorent || null;
   }
   function hasClient(clientName) {
     return Boolean(getClient(clientName));
@@ -2990,7 +2992,7 @@
   }
   function showTorrentMenu(torrentData) {
     var allTorrents = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
-    var client = Lampa.Storage.field("lmetorrentSelect");
+    var client = "qBittorent";
     var enabled = Lampa.Controller.enabled().name;
     var hasMetadata = torrentData.tmdb_id && torrentData.media_type || parseLabels(torrentData.labels);
     var torrentList = Array.isArray(allTorrents) ? allTorrents : [];
@@ -3060,7 +3062,7 @@
         while (1) switch (_context2.p = _context2.n) {
           case 0:
             allTorrents = _args2.length > 2 && _args2[2] !== undefined ? _args2[2] : [];
-            client = Lampa.Storage.field("lmetorrentSelect");
+            client = "qBittorent";
             torrentList = Array.isArray(allTorrents) ? allTorrents : [];
             actionType = action && action.action;
             if (!(actionType === "card")) {
@@ -3146,7 +3148,7 @@
               case 1:
                 this.updateInProgress = true;
                 _context.p = 2;
-                client_name = Lampa.Storage.get('lmetorrentSelect');
+                client_name = "qBittorent";
                 isUniversal = false;
                 if (!(isUniversal || !hasClient(client_name))) {
                   _context.n = 3;
@@ -3220,7 +3222,7 @@
   };
   function Component() {
     var self = this;
-    var client = Lampa.Storage.field("lmetorrentSelect");
+    var client = "qBittorent";
     var network = new RequestClass();
     var updateTick = null;
     var updateInProgress = false;
@@ -3484,7 +3486,7 @@
           return function () {
             Lampa.Activity.push({
               url: '',
-              title: Lampa.Lang.translate('torrentmanager_section_' + key) + " \u2014 " + (Lampa.Storage.field("lmetorrentSelect") || '').toUpperCase() + ' Manager',
+              title: Lampa.Lang.translate('torrentmanager_section_' + key) + " \u2014 " + ("qBittorent" || '').toUpperCase() + ' Manager',
               component: 'lmetorrentSectionView',
               page: 1,
               filterSection: key
@@ -3586,7 +3588,7 @@
                       return function () {
                         Lampa.Activity.push({
                           url: '',
-                          title: Lampa.Lang.translate('torrentmanager_section_' + key) + " \u2014 " + (Lampa.Storage.field("lmetorrentSelect") || '').toUpperCase() + ' Manager',
+                          title: Lampa.Lang.translate('torrentmanager_section_' + key) + " \u2014 " + ("qBittorent" || '').toUpperCase() + ' Manager',
                           component: 'lmetorrentSectionView',
                           page: 1,
                           filterSection: key
@@ -3782,7 +3784,7 @@
       var title = sectionDef ? Lampa.Lang.translate(sectionDef.langKey) : filterSection;
 
       // Update activity title
-      var client = Lampa.Storage.field("lmetorrentSelect") || '';
+      var client = "qBittorent" || '';
       this.activity.title = title + " \u2014 " + client.toUpperCase() + ' Manager';
       scroll.minus();
       scroll.append(grid);
@@ -3792,7 +3794,7 @@
     };
     this.load = function () {
       var filterSection = object.filterSection;
-      var client = Lampa.Storage.field("lmetorrentSelect");
+      var client = "qBittorent";
       if (!hasClient(client)) {
         this.empty();
         return;
@@ -4283,7 +4285,7 @@
       var activeMovie = Lampa.Activity.active().movie;
       var labels = resolveTorrentLabels$1(activeMovie);
       var dtype = resolveDestinationType$1(activeMovie);
-      var selectedClient = Lampa.Storage.field("lmetorrentSelect");
+      var selectedClient = "qBittorent";
       var menuConfig = CLIENT_MENU$1[selectedClient];
       if (!menuConfig) {
         return;
@@ -4348,7 +4350,7 @@
       };
       var labels = resolveTorrentLabels(movie);
       var dtype = resolveDestinationType(movie);
-      var selectedClient = Lampa.Storage.field("lmetorrentSelect");
+      var selectedClient = "qBittorent";
       var menuConfig = CLIENT_MENU[selectedClient];
       if (!menuConfig) {
         return;
@@ -4941,7 +4943,7 @@
         // Panel navigation item
         //createPanelNavigationItem(),
         {
-          title: String(Lampa.Storage.get('lmetorrentSelect') || '').toUpperCase() + " Manager",
+          title: String("qBittorent" || '').toUpperCase() + " Manager",
           action: 'panel',
           onSelect: function onSelect() {
             createPanelNavigationItem()();
@@ -5179,7 +5181,7 @@
 
           // If state manager has no data yet, try direct API call
           if (!torrents || !torrents.length) {
-            var client = Lampa.Storage.field('lmetorrentSelect');
+            var client = "qBittorent";
             if (hasClient(client)) {
               executeClientMethod(client, 'GetData', [], {
                 silentAuth: true
@@ -5221,6 +5223,10 @@
    *   B. IndexedDB cache via db.getMetadataByTmdbId()
    *   C. External API (Sonarr/Radarr) for clients without labels
    */
+
+  function getMetadataByTmdbId(tmdbId) {
+    return Promise.resolve(null);
+  }
 
   // Inflight map to prevent duplicate concurrent API requests for the same card
   var inflight = {};
@@ -5363,7 +5369,7 @@
       inflight[inflightKey] = true;
 
       // Step B: Check IndexedDB cache for previously resolved metadata
-      getMetadataByTmdbId(id).then(function (cachedMeta) {
+      (typeof getMetadataByTmdbId === 'function' ? getMetadataByTmdbId(id) : Promise.resolve(null)).then(function (cachedMeta) {
         if (cachedMeta && cachedMeta.torrent_id && torrents && torrents.length) {
           // Found cached match — verify torrent still exists in state manager
           for (var i = 0; i < torrents.length; i++) {
